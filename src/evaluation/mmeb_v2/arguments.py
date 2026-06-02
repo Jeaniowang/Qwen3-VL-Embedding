@@ -6,6 +6,7 @@ from typing import List
 @dataclass
 class ModelArguments:
     model_name_or_path: str = field(
+        default="Qwen/Qwen3-VL-Embedding-2B",
         metadata={"help": "huggingface model name or path"}
     )
     normalize: bool = field(
@@ -15,6 +16,20 @@ class ModelArguments:
     instruction: str = field(
         default="Represent the user's input.", 
         metadata={"help": "default instruction for the model"}
+    )
+    # vLLM arguments
+    use_vllm: bool = field(
+        default=False,
+        metadata={"help": "Use vLLM API service for inference instead of transformers"}
+    )
+    vllm_api_url: str = field(
+        default="http://192.168.9.146:9099/v1",
+        metadata={"help": "vLLM API service endpoint URL"}
+    )
+
+    api_timeout: int = field(
+        default=60,
+        metadata={"help": "API request timeout in seconds"}
     )
 
 @dataclass

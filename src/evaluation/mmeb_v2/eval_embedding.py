@@ -126,36 +126,56 @@ def main():
     eval_args: EvalArguments
     os.makedirs(data_args.encode_output_path, exist_ok=True)
 
-    # DDP-safe model loading
-    # Step 1: Only rank 0 downloads the model
-    if rank == 0:
-        print_master(f"[rank=0] Loading the model from: {model_args.model_name_or_path}...")
+    # Check if using vLLM
+    use_vllm = getattr(model_args, 'use_vllm', False)
+    
+    if use_vllm:
+        # vLLM mode - use API service, no DDP support
+        vllm_api_url = getattr(model_args, 'vllm_api_url', None)
+        print_master(f"[vLLM API mode] Connecting to service: {vllm_api_url or 'default'}...")
+        vllm_kwargs = {
+            'vllm_api_url': vllm_api_url,
+            'api_timeout': getattr(model_args, 'api_timeout', 60),
+        }
         model = MMEBEmbeddingModel.load(
             model_name_or_path=model_args.model_name_or_path,
             normalize=model_args.normalize,
             instruction=model_args.instruction,
-            attn_implementation='flash_attention_2',
-            torch_dtype=torch.bfloat16,
+            use_vllm=True,
+            vllm_kwargs=vllm_kwargs,
         )
+        model.eval()
+    else:
+        # DDP-safe model loading
+        # Step 1: Only rank 0 downloads the model
+        if rank == 0:
+            print_master(f"[rank=0] Loading the model from: {model_args.model_name_or_path}...")
+            model = MMEBEmbeddingModel.load(
+                model_name_or_path=model_args.model_name_or_path,
+                normalize=model_args.normalize,
+                instruction=model_args.instruction,
+                attn_implementation='flash_attention_2',
+                torch_dtype=torch.bfloat16,
+            )
 
-    # Step 2: All processes wait until rank 0 finishes downloading
-    if torch.distributed.is_initialized():
-        torch.distributed.barrier()
-    
-    # Step 3: Non-master processes load from local cache
-    if rank != 0:
-        print_rank(f"Loading the model from cache...")
-        time.sleep(random.randint(2 * rank, 3 * rank))
-        model = MMEBEmbeddingModel.load(
-            model_name_or_path=model_args.model_name_or_path,
-            normalize=model_args.normalize,
-            instruction=model_args.instruction,
-            attn_implementation='flash_attention_2',
-            torch_dtype=torch.bfloat16,
-        )
-    
-    model.eval()
-    model = model.to(eval_args.device, dtype=torch.bfloat16)
+        # Step 2: All processes wait until rank 0 finishes downloading
+        if torch.distributed.is_initialized():
+            torch.distributed.barrier()
+        
+        # Step 3: Non-master processes load from local cache
+        if rank != 0:
+            print_rank(f"Loading the model from cache...")
+            time.sleep(random.randint(2 * rank, 3 * rank))
+            model = MMEBEmbeddingModel.load(
+                model_name_or_path=model_args.model_name_or_path,
+                normalize=model_args.normalize,
+                instruction=model_args.instruction,
+                attn_implementation='flash_attention_2',
+                torch_dtype=torch.bfloat16,
+            )
+        
+        model.eval()
+        model = model.to(eval_args.device, dtype=torch.bfloat16)
     with open(data_args.dataset_config, 'r') as yaml_file:
         dataset_configs = yaml.safe_load(yaml_file)
 

@@ -66,8 +66,8 @@ MODEL_NAME="$1"
 MODEL_BASENAME=$(basename "$MODEL_NAME")
 
 BATCH_SIZE=16
-MODALITIES=("image" "video" "visdoc")
-# MODALITIES=("tmp")
+#MODALITIES=("image" "video" "visdoc")
+ MODALITIES=("tmp")
 DATA_BASEDIR=data/evaluation/mmeb_v2
 OUTPUT_BASEDIR=results/evaluation/mmeb_v2
 
@@ -98,14 +98,22 @@ for MODALITY in "${MODALITIES[@]}"; do
     # wait for master node
     sleep 2
 
-    cmd="CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES torchrun \
-        --nproc_per_node=$GPU_COUNT \
-        --nnodes=$WORLD_SIZE \
-        --node_rank=$RANK \
-        --master_addr=$MASTER_ADDR \
-        --master_port=$MASTER_PORT \
-        --max_restarts=0 \
-        -m src.evaluation.mmeb_v2.eval_embedding \
+#    cmd="CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES torchrun \
+#        --nproc_per_node=$GPU_COUNT \
+#        --nnodes=$WORLD_SIZE \
+#        --node_rank=$RANK \
+#        --master_addr=$MASTER_ADDR \
+#        --master_port=$MASTER_PORT \
+#        --max_restarts=0 \
+#        -m src.evaluation.mmeb_v2.eval_embedding \
+#        --normalize true \
+#        --per_device_eval_batch_size $BATCH_SIZE \
+#        --model_name_or_path \"$MODEL_NAME\" \
+#        --dataset_config \"$DATA_CONFIG_PATH\" \
+#        --encode_output_path \"$OUTPUT_PATH\" \
+#        --data_basedir \"$DATA_BASEDIR\""
+
+    cmd="python3 src.evaluation.mmeb_v2.eval_embedding \
         --normalize true \
         --per_device_eval_batch_size $BATCH_SIZE \
         --model_name_or_path \"$MODEL_NAME\" \

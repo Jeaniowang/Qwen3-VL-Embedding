@@ -1,0 +1,7 @@
+# CLS
+ImageNet-1K:
+    dataset_parser: image_cls
+    dataset_name: ImageNet-1K
+    dataset_split: test
+    image_root: image-tasks/
+    eval_type: local
