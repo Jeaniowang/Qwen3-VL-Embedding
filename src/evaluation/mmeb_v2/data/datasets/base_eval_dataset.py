@@ -40,7 +40,7 @@ class AutoEvalPairDataset(metaclass=ABCMeta):
     def __init__(self, *args, **kwargs):
         raise EnvironmentError(
             f"{self.__class__.__name__} is designed to be instantiated "
-            f"using the `{self.__class__.__name__}.from_pretrained(...)` methods."
+            f"using the `{self.__class__.__name__}.from_pretrained(evaluation.mmeb_v2)` methods."
         )
 
     @classmethod

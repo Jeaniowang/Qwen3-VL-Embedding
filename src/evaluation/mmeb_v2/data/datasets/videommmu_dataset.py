@@ -4,8 +4,8 @@ import datasets
 from datasets import load_dataset
 
 from .base_eval_dataset import AutoEvalPairDataset, add_metainfo_hook
-from ...utils.dataset_utils import sample_dataset
-from ...utils.vision_utils.vision_utils import process_video_frames, load_frames, qa_template
+from evaluation.mmeb_v2.utils.dataset_utils import sample_dataset
+from evaluation.mmeb_v2.utils.vision_utils.vision_utils import process_video_frames, load_frames, qa_template
 
 # Standardized task instruction
 TASK_INST = "Given a video and a question, select the most accurate answer from the provided candidates. Return only the exact text of your chosen answer."

@@ -1,12 +1,10 @@
 from typing import Dict, Optional, Any, List, Union, Literal, cast
 import os
-import io
+
 import torch
 import torch.distributed as dist
 from torch import nn, Tensor
-from transformers import AutoConfig
 
-from ...models.qwen3_vl_embedding import Qwen3VLEmbedder
 
 
 try:
@@ -46,7 +44,7 @@ class Qwen3VLEmbedderVLLM:
         self.default_instruction = default_instruction
         
         # Default to vLLM API server base URL (without /v1 suffix, OpenAI client adds it)
-        base_url = vllm_api_url or "http://localhost:8000/v1"
+        base_url = vllm_api_url or "http://192.168.9.146:9099/v1"
         
         # Initialize OpenAI client
         self.client = OpenAI(
@@ -253,7 +251,7 @@ class MMEBEmbeddingModel(nn.Module):
     """Simplified MMEBModel for Qwen3VL embeddings."""
 
     def __init__(self,
-                 encoder: Union[Qwen3VLEmbedder, Qwen3VLEmbedderVLLM],
+                 encoder: Union[Qwen3VLEmbedderVLLM],
                  normalize: bool = True,
                  temperature: float = 0.02,
                  use_vllm: bool = False):
@@ -263,18 +261,11 @@ class MMEBEmbeddingModel(nn.Module):
         self.temperature = temperature
         self.use_vllm = use_vllm
         
-        if not use_vllm:
-            self.cross_entropy = nn.CrossEntropyLoss(reduction='mean')
-            # DDP setup
-            self.is_ddp = dist.is_initialized()
-            if self.is_ddp:
-                self.process_rank = dist.get_rank()
-                self.world_size = dist.get_world_size()
-        else:
-            self.cross_entropy = None
-            self.is_ddp = False
-            self.process_rank = 0
-            self.world_size = 1
+
+        self.cross_entropy = None
+        self.is_ddp = False
+        self.process_rank = 0
+        self.world_size = 1
 
     @property
     def device(self):
@@ -310,19 +301,12 @@ class MMEBEmbeddingModel(nn.Module):
         """
         default_instruction = kwargs.pop('default_instruction', instruction)
 
-        if use_vllm:
-            vllm_kwargs = vllm_kwargs or {}
-            encoder = Qwen3VLEmbedderVLLM(
-                model_name_or_path=model_name_or_path,
-                default_instruction=default_instruction or "Represent the user's input.",
-                **vllm_kwargs
-            )
-        else:
-            encoder = Qwen3VLEmbedder(
-                model_name_or_path=model_name_or_path,
-                default_instruction=default_instruction or "Represent the user's input.",
-                **kwargs
-            )
+        vllm_kwargs = vllm_kwargs or {}
+        encoder = Qwen3VLEmbedderVLLM(
+            model_name_or_path=model_name_or_path,
+            default_instruction=default_instruction or "Represent the user's input.",
+            **vllm_kwargs
+        )
 
         return cls(
             encoder=encoder,
@@ -419,7 +403,7 @@ class MMEBEmbeddingModel(nn.Module):
 
 if __name__ == '__main__':
     model = MMEBEmbeddingModel.load(
-        model_name_or_path=r'Your model path',
+        model_name_or_path=r'Qwen/Qwen3-VL-Embedding-2B',
         attn_implementation='flash_attention_2',
         torch_dtype=torch.bfloat16, device_map='cuda'
     )

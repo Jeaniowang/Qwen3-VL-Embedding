@@ -28,12 +28,12 @@ echo ""
 # ==============================================================================
 # GPU Configuration
 # ==============================================================================
-if [ -z "$CUDA_VISIBLE_DEVICES" ]; then
-    GPU_COUNT=$(nvidia-smi --list-gpus | wc -l)
-    CUDA_VISIBLE_DEVICES=$(seq -s, 0 $((GPU_COUNT-1)))
-else
-    GPU_COUNT=$(echo "$CUDA_VISIBLE_DEVICES" | tr ',' '\n' | wc -l)
-fi
+#if [ -z "$CUDA_VISIBLE_DEVICES" ]; then
+#    GPU_COUNT=$(nvidia-smi --list-gpus | wc -l)
+#    CUDA_VISIBLE_DEVICES=$(seq -s, 0 $((GPU_COUNT-1)))
+#else
+#    GPU_COUNT=$(echo "$CUDA_VISIBLE_DEVICES" | tr ',' '\n' | wc -l)
+#fi
 
 echo "Using $GPU_COUNT GPUs per node: $CUDA_VISIBLE_DEVICES"
 echo "Total GPUs across all nodes: $((GPU_COUNT * WORLD_SIZE))"
@@ -113,17 +113,27 @@ for MODALITY in "${MODALITIES[@]}"; do
 #        --encode_output_path \"$OUTPUT_PATH\" \
 #        --data_basedir \"$DATA_BASEDIR\""
 
-    cmd="python3 src.evaluation.mmeb_v2.eval_embedding \
+    cd src/evaluation/
+    cmd="python3 -m src.evaluation.mmeb_v2.eval_embeddin\
         --normalize true \
         --per_device_eval_batch_size $BATCH_SIZE \
         --model_name_or_path \"$MODEL_NAME\" \
         --dataset_config \"$DATA_CONFIG_PATH\" \
         --encode_output_path \"$OUTPUT_PATH\" \
+        D:\data\mmeb_v2\image-tasks
         --data_basedir \"$DATA_BASEDIR\""
 
     echo "  - Executing command on node $RANK..."
-    eval "$cmd"
-    
+#    eval "$cmd"
+
+    python3 -m src.evaluation.mmeb_v2.eval_embeddin\
+        --normalize true \
+        --per_device_eval_batch_size $BATCH_SIZE \
+        --model_name_or_path "$MODEL_NAME" \
+        --dataset_config "$DATA_CONFIG_PATH" \
+        --encode_output_path "$OUTPUT_PATH" \
+        --data_basedir D:\data\mmeb_v2\image-tasks
+
     if [ $? -eq 0 ]; then
         echo "  - ✅ Done on node $RANK."
     else

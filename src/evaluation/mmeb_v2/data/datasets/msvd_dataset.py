@@ -1,9 +1,9 @@
 import os
 
-from ...constant import EVAL_DATASET_HF_PATH
+from evaluation.mmeb_v2.constant import EVAL_DATASET_HF_PATH
 from .base_eval_dataset import AutoEvalPairDataset, add_metainfo_hook
-from ...utils.dataset_utils import load_hf_dataset, sample_dataset
-from ...utils.vision_utils.vision_utils import save_frames, process_video_frames
+from evaluation.mmeb_v2.utils.dataset_utils import load_hf_dataset, sample_dataset
+from evaluation.mmeb_v2.utils.vision_utils.vision_utils import save_frames, process_video_frames
 
 
 TASK_INST_QRY = "Find the video snippet that corresponds to the given summary."

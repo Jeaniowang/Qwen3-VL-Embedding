@@ -48,6 +48,8 @@ DATASET_HF_PATH = "ziyjiang/MMEB_Test_Instruct"
 @AutoEvalPairDataset.register(DATASET_PARSER_NAME)
 def load_image_cls_dataset(model_args, data_args, *args, **kwargs):
     dataset_name = kwargs["dataset_name"]
+
+    print(f"888888888888888888888888 dataset_name:{dataset_name}")
     dataset = load_dataset(DATASET_HF_PATH, dataset_name, split="test")
     
     num_sample_per_subset = kwargs.get("num_sample_per_subset", sys.maxsize)

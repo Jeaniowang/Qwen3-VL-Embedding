@@ -160,7 +160,7 @@ def download_dataset(name, repo_id, subset, split):
 def main():
     os.makedirs(BASE_ANNOTATION_DIR, exist_ok=True)
     
-    print(f"Starting dataset downloads to {BASE_ANNOTATION_DIR}...")
+    print(f"Starting dataset downloads to {BASE_ANNOTATION_DIR}evaluation.mmeb_v2")
     print(f"Total datasets: {len(EVAL_DATASET_HF_PATH)}\n")
     
     for name, (repo_id, subset, split) in tqdm(EVAL_DATASET_HF_PATH.items()):

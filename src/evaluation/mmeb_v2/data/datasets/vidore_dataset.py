@@ -6,9 +6,9 @@ from datasets import Dataset, DatasetDict
 from tqdm import tqdm
 
 from .base_eval_dataset import AutoEvalPairDataset, add_metainfo_hook
-from ...constant import EVAL_DATASET_HF_PATH
-from ...utils.dataset_utils import load_hf_dataset, sample_dataset, load_qrels_mapping
-from ...utils.basic_utils import print_master
+from evaluation.mmeb_v2.constant import EVAL_DATASET_HF_PATH
+from evaluation.mmeb_v2.utils.dataset_utils import load_hf_dataset, sample_dataset, load_qrels_mapping
+from evaluation.mmeb_v2.utils.basic_utils import print_master
 
 
 TASK_INST_QRY = "Find a document image that matches the given query."

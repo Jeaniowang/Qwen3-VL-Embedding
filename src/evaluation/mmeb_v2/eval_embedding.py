@@ -117,7 +117,7 @@ def main():
     print_master("=== Distributed Setup Initialized ===")
     print_master(f"Master Info -> ADDR: {os.environ.get('MASTER_ADDR')}, PORT: {os.environ.get('MASTER_PORT')}")
     print_master(f"Global World Size: {world_size}")
-    print_rank(f"Process Identity -> Rank: {rank}, Local Rank: {local_rank} on {torch.cuda.get_device_name()}")
+    # print_rank(f"Process Identity -> Rank: {rank}, Local Rank: {local_rank} on {torch.cuda.get_device_name()}")
 
     parser = HfArgumentParser((ModelArguments, DataArguments, EvalArguments))
     model_args, data_args, eval_args = parser.parse_args_into_dataclasses()
@@ -127,63 +127,31 @@ def main():
     os.makedirs(data_args.encode_output_path, exist_ok=True)
 
     # Check if using vLLM
-    use_vllm = getattr(model_args, 'use_vllm', False)
-    
-    if use_vllm:
-        # vLLM mode - use API service, no DDP support
-        vllm_api_url = getattr(model_args, 'vllm_api_url', None)
-        print_master(f"[vLLM API mode] Connecting to service: {vllm_api_url or 'default'}...")
-        vllm_kwargs = {
-            'vllm_api_url': vllm_api_url,
-            'api_timeout': getattr(model_args, 'api_timeout', 60),
-        }
-        model = MMEBEmbeddingModel.load(
-            model_name_or_path=model_args.model_name_or_path,
-            normalize=model_args.normalize,
-            instruction=model_args.instruction,
-            use_vllm=True,
-            vllm_kwargs=vllm_kwargs,
-        )
-        model.eval()
-    else:
-        # DDP-safe model loading
-        # Step 1: Only rank 0 downloads the model
-        if rank == 0:
-            print_master(f"[rank=0] Loading the model from: {model_args.model_name_or_path}...")
-            model = MMEBEmbeddingModel.load(
-                model_name_or_path=model_args.model_name_or_path,
-                normalize=model_args.normalize,
-                instruction=model_args.instruction,
-                attn_implementation='flash_attention_2',
-                torch_dtype=torch.bfloat16,
-            )
 
-        # Step 2: All processes wait until rank 0 finishes downloading
-        if torch.distributed.is_initialized():
-            torch.distributed.barrier()
-        
-        # Step 3: Non-master processes load from local cache
-        if rank != 0:
-            print_rank(f"Loading the model from cache...")
-            time.sleep(random.randint(2 * rank, 3 * rank))
-            model = MMEBEmbeddingModel.load(
-                model_name_or_path=model_args.model_name_or_path,
-                normalize=model_args.normalize,
-                instruction=model_args.instruction,
-                attn_implementation='flash_attention_2',
-                torch_dtype=torch.bfloat16,
-            )
-        
-        model.eval()
-        model = model.to(eval_args.device, dtype=torch.bfloat16)
+    # vLLM mode - use API service, no DDP support
+    vllm_api_url = getattr(model_args, 'vllm_api_url', None)
+    print_master(f"[vLLM API mode] Connecting to service: {vllm_api_url or 'default'}...")
+    vllm_kwargs = {
+        'vllm_api_url': vllm_api_url,
+        'api_timeout': getattr(model_args, 'api_timeout', 60),
+    }
+    model = MMEBEmbeddingModel.load(
+        model_name_or_path=model_args.model_name_or_path,
+        normalize=model_args.normalize,
+        instruction=model_args.instruction,
+        use_vllm=True,
+        vllm_kwargs=vllm_kwargs,
+    )
+    model.eval()
+
     with open(data_args.dataset_config, 'r') as yaml_file:
         dataset_configs = yaml.safe_load(yaml_file)
 
     # Main evaluation loop
     for dataset_idx, (dataset_name, task_config) in enumerate(dataset_configs.items()):
         # 0. load dataset
-        if dist.is_initialized():
-            dist.barrier()
+        # if dist.is_initialized():
+        #     dist.barrier()
         print_master(f"--- Evaluating {dataset_name} ---")
 
         query_embed_path = os.path.join(data_args.encode_output_path, f"{dataset_name}_qry")
@@ -206,14 +174,14 @@ def main():
                 full_eval_cand_dataset = generate_cand_dataset(full_eval_qry_dataset, corpus)
                 eval_qry_dataset, eval_cand_dataset = full_eval_qry_dataset, full_eval_cand_dataset
                 
-                # Pad datasets to be divisible by world_size before splitting
-                if dist.is_initialized():
-                    padded_qry_dataset, _ = pad_dataset_to_divisible(full_eval_qry_dataset, world_size)
-                    padded_cand_dataset, _ = pad_dataset_to_divisible(full_eval_cand_dataset, world_size)
-                    eval_qry_dataset = split_dataset_by_node(padded_qry_dataset, rank=rank, world_size=world_size)
-                    eval_cand_dataset = split_dataset_by_node(padded_cand_dataset, rank=rank, world_size=world_size)
-                else:
-                    padded_qry_dataset, padded_cand_dataset = full_eval_qry_dataset, full_eval_cand_dataset
+                # # Pad datasets to be divisible by world_size before splitting
+                # if dist.is_initialized():
+                #     padded_qry_dataset, _ = pad_dataset_to_divisible(full_eval_qry_dataset, world_size)
+                #     padded_cand_dataset, _ = pad_dataset_to_divisible(full_eval_cand_dataset, world_size)
+                #     eval_qry_dataset = split_dataset_by_node(padded_qry_dataset, rank=rank, world_size=world_size)
+                #     eval_cand_dataset = split_dataset_by_node(padded_cand_dataset, rank=rank, world_size=world_size)
+                # else:
+                padded_qry_dataset, padded_cand_dataset = full_eval_qry_dataset, full_eval_cand_dataset
             except Exception as e:
                 print_master(f"Failed to load dataset {dataset_name}, skipping {dataset_name}")
                 import traceback
@@ -254,8 +222,8 @@ def main():
                         
                 print_master(f"Successfully saved {len(query_embeds)} query embeddings to {query_embed_path}")
 
-            if dist.is_initialized():
-                dist.barrier()
+            # if dist.is_initialized():
+            #     dist.barrier()
 
         # 2. Compute candidate embeddings
         if do_cand:
@@ -340,7 +308,7 @@ def main():
                         ranked_indices = ranked_indices.cpu().numpy()
                     
                     del cand_tensor
-                    torch.cuda.empty_cache()
+                    torch.npu.empty_cache()
 
                     for qid, (ranked_idx, gt_info) in tqdm(
                         enumerate(zip(ranked_indices, gt_infos)), 
@@ -381,7 +349,7 @@ def main():
                             "rel_scores": rel_scores,
                         })
                     
-                    torch.cuda.empty_cache()
+                    torch.npu.empty_cache()
 
                 # Compute metrics
                 metrics_to_report = task_config.get("metrics", ["hit", "ndcg", "precision", "recall", "f1", "map", "mrr"])
@@ -403,9 +371,9 @@ def main():
                 formatted = {k: f"{v:.4f}" for k, v in score_dict.items() if isinstance(v, (int, float))}
                 print_master(f"Final Score for {dataset_name}: {formatted}")
 
-    if dist.is_initialized():
-        dist.barrier()
-        dist.destroy_process_group()
+    # if dist.is_initialized():
+    #     dist.barrier()
+    #     dist.destroy_process_group()
 
 if __name__ == "__main__":
     main()

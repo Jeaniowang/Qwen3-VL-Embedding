@@ -16,12 +16,12 @@ from transformers import HfArgumentParser
 from datasets import concatenate_datasets
 from datasets.distributed import split_dataset_by_node
 
-from .arguments import RerankArguments, DataArguments, EvalArguments
-from .utils.basic_utils import print_rank, print_master
-from .utils.eval_utils.metrics import RankingMetrics
-from .data.datasets.base_eval_dataset import AutoEvalPairDataset, generate_cand_dataset
+from arguments import RerankArguments, DataArguments, EvalArguments
+from utils.basic_utils import print_rank, print_master
+from utils.eval_utils.metrics import RankingMetrics
+from data.datasets.base_eval_dataset import AutoEvalPairDataset, generate_cand_dataset
 
-from ...models.qwen3_vl_reranker import Qwen3VLReranker
+from evaluation.mmeb_v2.models.qwen3_vl_reranker import Qwen3VLReranker
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)

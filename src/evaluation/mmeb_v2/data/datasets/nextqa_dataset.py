@@ -7,10 +7,10 @@ from pathlib import Path
 from datasets import Dataset, DatasetDict
 from tqdm import tqdm
 
-from ...constant import EVAL_DATASET_HF_PATH
+from evaluation.mmeb_v2.constant import EVAL_DATASET_HF_PATH
 from .base_eval_dataset import AutoEvalPairDataset, add_metainfo_hook
-from ...utils.dataset_utils import load_hf_dataset, sample_dataset
-from ...utils.vision_utils.vision_utils import process_video_frames, load_frames, qa_template
+from evaluation.mmeb_v2.utils.dataset_utils import load_hf_dataset, sample_dataset
+from evaluation.mmeb_v2.utils.vision_utils.vision_utils import process_video_frames, load_frames, qa_template
 
 
 TASK_INST = "Given a video and a question, select the most accurate answer from the provided candidates. Return only the exact text of your chosen answer."
@@ -49,6 +49,9 @@ def data_prepare(batch_dict, *args, **kwargs):
             if os.path.exists(video_path):
                 cap = cv2.VideoCapture(video_path)
                 total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                if total_frames <= 0:
+                    cap.release()
+                    continue  # Skip corrupted video
                 step = max(1, total_frames // max_frames_saved)
                 saved_frames = 0
                 while saved_frames < max_frames_saved:

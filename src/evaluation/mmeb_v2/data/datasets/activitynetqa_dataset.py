@@ -1,10 +1,10 @@
 import os
 import cv2
 
-from .base_eval_dataset import AutoEvalPairDataset, add_metainfo_hook
-from ...constant import EVAL_DATASET_HF_PATH
-from ...utils.dataset_utils import load_hf_dataset, sample_dataset
-from ...utils.vision_utils.vision_utils import process_video_frames, load_frames
+from base_eval_dataset import AutoEvalPairDataset, add_metainfo_hook
+from evaluation.mmeb_v2.constant import EVAL_DATASET_HF_PATH
+from evaluation.mmeb_v2.utils.dataset_utils import load_hf_dataset, sample_dataset
+from evaluation.mmeb_v2.utils.vision_utils.vision_utils import process_video_frames, load_frames
 
 
 TASK_PROMPT = "Given a video and a question, select the most accurate answer from the provided candidates. Return only the exact text of your chosen answer."
