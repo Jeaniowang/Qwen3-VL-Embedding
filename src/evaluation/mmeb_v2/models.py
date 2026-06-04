@@ -1,3 +1,4 @@
+import base64
 from typing import Dict, Optional, Any, List, Union, Literal, cast
 import os
 
@@ -92,6 +93,33 @@ class Qwen3VLEmbedderVLLM:
             },
         )
 
+    def encode_image_to_base64(self,image_path: str) -> str:
+        """
+        将本地图片文件编码为 Base64 字符串
+
+        :param image_path: 本地图片文件路径
+        :return: Base64 编码的图片字符串（包含格式前缀）
+        """
+        # 检查文件是否存在
+        if not os.path.exists(image_path):
+            raise FileNotFoundError(f"图片文件不存在: {image_path}")
+
+        # 获取图片格式（从文件扩展名推断）
+        _, ext = os.path.splitext(image_path)
+        image_format = ext.lower().lstrip('.') if ext else 'png'
+
+        # 支持的图片格式
+        supported_formats = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp']
+        if image_format not in supported_formats:
+            raise ValueError(f"不支持的图片格式: {image_format}")
+
+        # 读取图片并编码为 Base64
+        with open(image_path, 'rb') as f:
+            image_bytes = f.read()
+            base64_encoded = base64.b64encode(image_bytes).decode('utf-8')
+
+        # 构造包含格式的完整 Base64 字符串
+        return f"data:image/{image_format};base64,{base64_encoded}"
 
     def _build_messages(
         self,
@@ -129,12 +157,9 @@ class Qwen3VLEmbedderVLLM:
                                     "image_url": {"url": img}
                                 })
                             else:
-                                # Local file path - convert to file:// URL
-                                if not img.startswith('file://'):
-                                    img = 'file://' + os.path.abspath(img)
                                 user_content.append({
                                     "type": "image_url",
-                                    "image_url": {"url": img}
+                                    "image_url": {"url": self.encode_image_to_base64(os.path.abspath(img))}
                                 })
                         else:
                             raise TypeError(f"Unsupported image type: {type(img)}")
@@ -146,11 +171,9 @@ class Qwen3VLEmbedderVLLM:
                                 "image_url": {"url": image}
                             })
                         else:
-                            if not image.startswith('file://'):
-                                image = 'file://' + os.path.abspath(image)
                             user_content.append({
                                 "type": "image_url",
-                                "image_url": {"url": image}
+                                "image_url": {"url": self.encode_image_to_base64(os.path.abspath(image))}
                             })
                     else:
                         raise TypeError(f"Unsupported image type: {type(image)}")

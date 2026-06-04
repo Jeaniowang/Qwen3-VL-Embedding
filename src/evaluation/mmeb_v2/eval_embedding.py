@@ -16,13 +16,12 @@ from torch.utils.data import DataLoader
 from transformers import HfArgumentParser
 from datasets import concatenate_datasets
 from datasets.distributed import split_dataset_by_node
-from .arguments import ModelArguments, DataArguments, EvalArguments
-from .utils.basic_utils import print_rank, print_master
-from .utils.eval_utils.metrics import RankingMetrics
-from .models import MMEBEmbeddingModel
-from .data.datasets.base_eval_dataset import AutoEvalPairDataset, generate_cand_dataset
-from .data.collator import MultimodalEvalDataCollator
-
+from arguments import ModelArguments, DataArguments, EvalArguments
+from utils.basic_utils import print_rank, print_master
+from utils.eval_utils.metrics import RankingMetrics
+from models import MMEBEmbeddingModel
+from data.datasets.base_eval_dataset import AutoEvalPairDataset, generate_cand_dataset
+from data.collator import MultimodalEvalDataCollator
 def pad_dataset_to_divisible(dataset, world_size):
     num_samples = len(dataset)
     if num_samples % world_size == 0:
@@ -160,7 +159,8 @@ def main():
 
         do_query = not os.path.exists(query_embed_path) or not os.path.exists(dataset_info_path)
         do_cand = not os.path.exists(cand_embed_path)
-
+        do_query = True
+        do_cand = True
         if do_query or do_cand:
             if data_args.data_basedir is not None:
                 for key in ["image_root", "video_root", "frame_root", "clip_root", "data_path"]:
@@ -308,7 +308,7 @@ def main():
                         ranked_indices = ranked_indices.cpu().numpy()
                     
                     del cand_tensor
-                    torch.npu.empty_cache()
+                    # torch.npu.empty_cache()
 
                     for qid, (ranked_idx, gt_info) in tqdm(
                         enumerate(zip(ranked_indices, gt_infos)), 
@@ -349,7 +349,7 @@ def main():
                             "rel_scores": rel_scores,
                         })
                     
-                    torch.npu.empty_cache()
+                    # torch.npu.empty_cache()
 
                 # Compute metrics
                 metrics_to_report = task_config.get("metrics", ["hit", "ndcg", "precision", "recall", "f1", "map", "mrr"])
