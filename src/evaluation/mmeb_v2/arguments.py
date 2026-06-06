@@ -69,3 +69,8 @@ class RerankArguments:
 
     # topk setting
     topk: int = field(default=100, metadata={"help": "TopK from embedding retrieval to rerank."})
+
+    vllm_api_url: str = field(
+        default="http://192.168.9.146:9099/v1",
+        metadata={"help": "vLLM API service endpoint URL"}
+    )

@@ -1,4 +1,5 @@
 import base64
+import pprint
 from typing import Dict, Optional, Any, List, Union, Literal, cast
 import os
 
@@ -9,10 +10,10 @@ from torch import nn, Tensor
 
 
 try:
-    from openai import OpenAI
+    from openai import OpenAI, BaseModel
     from openai._types import NOT_GIVEN, NotGiven
     from openai.types.chat import ChatCompletionMessageParam
-    from openai.types.create_embedding_response import CreateEmbeddingResponse
+    from openai.types.create_embedding_response import CreateEmbeddingResponse, Usage
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False
@@ -66,21 +67,6 @@ class Qwen3VLEmbedderVLLM:
         which is an extension of OpenAI's existing Embeddings API.
         Reference: d.py create_chat_embeddings function.
         """
-        # return cast(
-        #     CreateEmbeddingResponse,
-        #     self.client.post(
-        #         "/embeddings",
-        #         cast_to=CreateEmbeddingResponse,
-        #         body={
-        #             "messages": messages,
-        #             "model": model,
-        #             "encoding_format": encoding_format,
-        #             "continue_final_message": continue_final_message,
-        #             "add_special_tokens": add_special_tokens,
-        #         },
-        #     )
-        # )
-
         return self.client.post(
             "/embeddings",
             cast_to=CreateEmbeddingResponse,
@@ -424,7 +410,245 @@ class MMEBEmbeddingModel(nn.Module):
         return torch.matmul(q_reps, p_reps.T)
 
 
-if __name__ == '__main__':
+
+class RerankResult(BaseModel):
+    """Represents an embedding vector returned by embedding endpoint."""
+
+    document: dict[str, str]
+    """The document text and other metadata."""
+
+
+    index: int
+    """The index of the embedding in the list of embeddings."""
+
+    relevance_score: float
+    """The object type, which is always "embedding"."""
+
+
+class CreateRerankResponse(BaseModel):
+    """Response from the vLLM /rerank API endpoint."""
+    results: List[RerankResult]
+
+    model: str
+    """The name of the model used to generate the embedding."""
+
+    object: Literal["list"]
+    """The object type, which is always "list"."""
+
+    usage: Usage
+    """The usage information for the request."""
+
+class Qwen3VLRerankerVLLM:
+    """Qwen3VL Reranker using vLLM Rerank API service for inference.
+    
+    Refer to Qwen3VLEmbedderVLLM for the reference implementation using OpenAI client.
+    """
+
+    def __init__(
+            self,
+            model_name_or_path: str,
+            default_instruction: str = "Given a search query, retrieve relevant candidates that answer the query.",
+            vllm_api_url: Optional[str] = None,
+            **kwargs,
+    ):
+        if not OPENAI_AVAILABLE:
+            raise ImportError("OpenAI Python client is not installed. Please install it to use this feature.")
+
+        self.model_name_or_path = model_name_or_path
+        self.default_instruction = default_instruction
+
+        # Default to vLLM API server base URL (without /v1 suffix, OpenAI client adds it)
+        base_url = vllm_api_url or "http://192.168.9.146:9099/v1"
+
+        # Initialize OpenAI client
+        self.client = OpenAI(
+            api_key="EMPTY",  # vLLM doesn't require API key
+            base_url=base_url,
+        )
+
+    def encode_image_to_base64(self, image_path: str) -> str:
+        """
+        将本地图片文件编码为 Base64 字符串
+
+        :param image_path: 本地图片文件路径
+        :return: Base64 编码的图片字符串（包含格式前缀）
+        """
+        # 检查文件是否存在
+        if not os.path.exists(image_path):
+            raise FileNotFoundError(f"图片文件不存在: {image_path}")
+
+        # 获取图片格式（从文件扩展名推断）
+        _, ext = os.path.splitext(image_path)
+        image_format = ext.lower().lstrip('.') if ext else 'png'
+
+        # 支持的图片格式
+        supported_formats = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp']
+        if image_format not in supported_formats:
+            raise ValueError(f"不支持的图片格式: {image_format}")
+
+        # 读取图片并编码为 Base64
+        with open(image_path, 'rb') as f:
+            image_bytes = f.read()
+            base64_encoded = base64.b64encode(image_bytes).decode('utf-8')
+
+        # 构造包含格式的完整 Base64 字符串
+        return f"data:image/{image_format};base64,{base64_encoded}"
+
+    def _build_content(
+            self,
+            text: Optional[Union[List[str], str]] = None,
+            image: Optional[Union[List[Union[str, Image.Image]], str, Image.Image]] = None,
+            video: Optional[
+                Union[List[Union[str, List[Union[str, Image.Image]]]], str, List[Union[str, Image.Image]]]] = None,
+    ) -> List[Dict]:
+        """Build content list in Jina/Cohere rerank API format.
+        
+        Returns a list of content blocks with types: text, image_url, video_url.
+        """
+        content = []
+
+        # Normalize text input to list
+        if text is None:
+            texts = []
+        elif isinstance(text, str):
+            texts = [text]
+        else:
+            texts = text
+
+        # Normalize image input to list
+        if image is None:
+            images = []
+        elif not isinstance(image, list):
+            images = [image]
+        else:
+            images = image
+
+        # Handle video
+        if video is not None:
+            if isinstance(video, str):
+                video_url = video if video.startswith(('http://', 'https://')) else 'file://' + os.path.abspath(video)
+                content.append({
+                    'type': 'video_url',
+                    'video_url': {'url': video_url}
+                })
+            elif isinstance(video, list):
+                content.append({'type': 'text', 'text': '[VIDEO]'})
+
+        if not texts and not images and video is None:
+            content.append({'type': 'text', 'text': "NULL"})
+            return content
+
+        # Process each image
+        for img in images:
+            if isinstance(img, Image.Image):
+                import tempfile
+                with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
+                    img.save(tmp.name)
+                    content.append({
+                        'type': 'image_url',
+                        'image_url': {'url': self.encode_image_to_base64(tmp.name)}
+                    })
+                os.unlink(tmp.name)
+            elif isinstance(img, str):
+                if img.startswith(('http://', 'https://')):
+                    content.append({
+                        'type': 'image_url',
+                        'image_url': {'url': img}
+                    })
+                else:
+                    content.append({
+                        'type': 'image_url',
+                        'image_url': {'url': self.encode_image_to_base64(os.path.abspath(img))}
+                    })
+            else:
+                raise TypeError(f"Unrecognized image type: {type(img)}")
+
+        # Process each text
+        for txt in texts:
+            content.append({'type': 'text', 'text': txt})
+
+        return content
+
+    def _build_rerank_request(
+            self,
+            query: Dict[str, Any],
+            documents: List[Dict[str, Any]],
+            instruction: str
+    ) -> Dict[str, Any]:
+        """Build rerank request in Jina/Cohere compatible format for vLLM Rerank API.
+        
+        Reference: new.py examples/pooling/score/t.py
+        """
+        # Build query content with instruction prefix
+        query_content = []
+        query_content.append({
+            'type': 'text',
+            'text': '<Instruct>: ' + instruction + '\n<Query>:'
+        })
+        query_content.extend(self._build_content(
+            text=query.get('text'),
+            image=query.get('image'),
+            video=query.get('video'),
+        ))
+
+        # Build document contents
+        docs = []
+        for doc in documents:
+            doc_content = []
+            doc_content.append({
+                'type': 'text',
+                'text': '\n<Document>:'
+            })
+            doc_content.extend(self._build_content(
+                text=doc.get('text'),
+                image=doc.get('image'),
+                video=doc.get('video'),
+            ))
+            docs.append({"content": doc_content})
+
+        return {
+            "model": self.model_name_or_path,
+            "query": {"content": query_content},
+            "documents": docs,
+        }
+
+    def process(
+            self,
+            inputs: Dict,
+    ) -> List[float]:
+        """Process inputs and generate rerank scores using vLLM Rerank API.
+
+        Args:
+            inputs: Dict with 'query', 'documents', and optional 'instruction' keys.
+
+        Returns:
+            List of similarity scores for each document.
+        """
+        instruction = inputs.get('instruction', self.default_instruction)
+
+        query = inputs.get("query", {})
+        documents = inputs.get("documents", [])
+
+        if not query or not documents:
+            return []
+
+        # Build rerank request in Jina/Cohere compatible format
+        request_data = self._build_rerank_request(query, documents, instruction)
+
+        # Call vLLM Rerank API
+        response = self.client.post(
+            "/rerank",
+            cast_to=CreateRerankResponse,
+            body=request_data,
+        )
+
+        # Extract scores from response
+
+        final_scores = [result.relevance_score for result in response.results]
+
+        return final_scores
+
+def test_embedding():
     model = MMEBEmbeddingModel.load(
         model_name_or_path=r'Qwen/Qwen3-VL-Embedding-2B',
         attn_implementation='flash_attention_2',
@@ -456,3 +680,33 @@ if __name__ == '__main__':
         f'Embeddings:\n{embeddings[:, :10].tolist()}\n{embeddings[:, -10:].tolist()}\n'
         f'Score:\n{model.compute_similarity(embeddings, embeddings).tolist()}\n'
     )
+
+def test_rerank():
+    model = Qwen3VLRerankerVLLM(
+        model_name_or_path=r'Qwen/Qwen3-VL-Reranker-2B',
+        vllm_api_url="http://192.168.13.113:9089/v1"
+    )
+
+    inputs = {
+        'query': {
+            'text': "a woman breaks an egg",
+            'instruction': 'Find images that corresponds to the given summary.',
+        },
+        'documents': [
+            {
+                'text': "a woman breaks an egg",
+                'instruction': 'Find images that corresponds to the given summary.',
+            },
+            {
+                'text': "a woman breaks two eggs in a bowl",
+                'instruction': 'Find images that corresponds to the given summary.',
+            },
+        ],
+    }
+
+    scores = model.process(inputs)
+
+    print(f'Scores: {scores}')
+
+if __name__ == '__main__':
+    test_rerank()

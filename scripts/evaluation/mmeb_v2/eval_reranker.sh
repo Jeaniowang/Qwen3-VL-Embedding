@@ -102,25 +102,33 @@ for MODALITY in "${MODALITIES[@]}"; do
     # wait for master node
     sleep 2
 
-    cmd="CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES torchrun \
-        --nproc_per_node=$GPU_COUNT \
-        --nnodes=$WORLD_SIZE \
-        --node_rank=$RANK \
-        --master_addr=$MASTER_ADDR \
-        --master_port=$MASTER_PORT \
-        --max_restarts=0 \
-        -m src.evaluation.mmeb_v2.eval_reranker \
-        --per_device_eval_batch_size $BATCH_SIZE \
-        --model_name_or_path \"$MODEL_NAME\" \
-        --dataset_config \"$DATA_CONFIG_PATH\" \
-        --encode_output_path \"$MODALITY_ENCODE_OUTPUT_PATH\" \
-        --rerank_output_path \"$OUTPUT_PATH\" \
-        --data_basedir \"$DATA_BASEDIR\" \
-        --topk $TOPK"
+#    cmd="CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES torchrun \
+#        --nproc_per_node=$GPU_COUNT \
+#        --nnodes=$WORLD_SIZE \
+#        --node_rank=$RANK \
+#        --master_addr=$MASTER_ADDR \
+#        --master_port=$MASTER_PORT \
+#        --max_restarts=0 \
+#        -m src.evaluation.mmeb_v2.eval_reranker \
+#        --per_device_eval_batch_size $BATCH_SIZE \
+#        --model_name_or_path \"$MODEL_NAME\" \
+#        --dataset_config \"$DATA_CONFIG_PATH\" \
+#        --encode_output_path \"$MODALITY_ENCODE_OUTPUT_PATH\" \
+#        --rerank_output_path \"$OUTPUT_PATH\" \
+#        --data_basedir \"$DATA_BASEDIR\" \
+#        --topk $TOPK"
+#
+#    echo "  - Executing command on node $RANK..."
+#    eval "$cmd"
+    python3 src/evaluation/mmeb_v2/eval_reranker.py  --per_device_eval_batch_size 16 \
+    --model_name_or_path "Qwen/Qwen3-VL-Reranker-2B" \
+     --dataset_config "scripts/evaluation/mmeb_v2/image_retrieval_tmp.yaml" \
+     --encode_output_path "results/evaluation/mmeb_v2/Qwen3-VL-Embedding-2B/tmp/"  \
+     --rerank_output_path results/evaluation/mmeb_v2/Qwen3-VL-Reranker-2B \
+     --data_basedir "D:\data\mmeb_v2" \
+     --topk 100 \
+     --vllm_api_url http://192.168.9.146:8000/v1
 
-    echo "  - Executing command on node $RANK..."
-    eval "$cmd"
-    
     if [ $? -eq 0 ]; then
         echo "  - ✅ Done on node $RANK."
     else

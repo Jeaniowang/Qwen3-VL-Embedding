@@ -40,7 +40,8 @@ def data_prepare(batch_dict, *args, **kwargs):
 
 
 DATASET_PARSER_NAME = "image_qa"
-DATASET_HF_PATH = "ziyjiang/MMEB_Test_Instruct"
+# DATASET_HF_PATH = "ziyjiang/MMEB_Test_Instruct"
+DATASET_HF_PATH = "D:\Code\MMEB_Test_Instruct"
 
 @AutoEvalPairDataset.register(DATASET_PARSER_NAME)
 def load_image_qa_dataset(model_args, data_args, *args, **kwargs):

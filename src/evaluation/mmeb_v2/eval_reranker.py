@@ -17,11 +17,11 @@ from datasets import concatenate_datasets
 from datasets.distributed import split_dataset_by_node
 
 from arguments import RerankArguments, DataArguments, EvalArguments
+from models import Qwen3VLRerankerVLLM
 from utils.basic_utils import print_rank, print_master
 from utils.eval_utils.metrics import RankingMetrics
 from data.datasets.base_eval_dataset import AutoEvalPairDataset, generate_cand_dataset
 
-from evaluation.mmeb_v2.models.qwen3_vl_reranker import Qwen3VLReranker
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -67,19 +67,19 @@ def load_topk_from_pred(pred_path: str, topk: int):
 
 @torch.no_grad()
 def rerank_topk_for_queries(
-    reranker: Qwen3VLReranker,
+    reranker:Qwen3VLRerankerVLLM,
     query_dataset,
     cand_lookup: dict,
     batch_size: int,
     full_dataset_len: int,
 ):
     """
-    For each query, rerank its retrieved TopK candidates by Qwen3VLReranker.
+    For each query, rerank its retrieved TopK candidates by Qwen3VLRerankerVLLM.
     Return pred_dicts compatible with RankingMetrics.
     """
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
-    rank = dist.get_rank() if dist.is_initialized() else 0
-    world_size = dist.get_world_size() if dist.is_initialized() else 1
+    rank =  0
+    world_size =  1
 
     pred_dicts = []
 
@@ -164,57 +164,37 @@ def rerank_topk_for_queries(
 
 def main():
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
-    if torch.cuda.is_available():
-        torch.cuda.set_device(local_rank)
 
-    if "RANK" in os.environ and dist.is_available() and not dist.is_initialized():
-        dist.init_process_group(backend="nccl", timeout=timedelta(minutes=60))
-
-    rank = dist.get_rank() if dist.is_initialized() else 0
-    world_size = dist.get_world_size() if dist.is_initialized() else 1
-
+    world_size = 1
+    rank = 0
     print_master("=== Distributed Setup Initialized (Reranker Eval) ===")
     print_master(f"Master -> ADDR: {os.environ.get('MASTER_ADDR')}, PORT: {os.environ.get('MASTER_PORT')}")
     print_master(f"World Size: {world_size}")
-    if torch.cuda.is_available():
-        print_rank(f"Rank: {rank}, Local Rank: {local_rank} on {torch.cuda.get_device_name()}")
-    
+
     parser = HfArgumentParser((RerankArguments, DataArguments, EvalArguments))
     model_args, data_args, eval_args = parser.parse_args_into_dataclasses()
 
     output_dir = data_args.rerank_output_path or \
         os.path.join(data_args.encode_output_path, 'rerank_output')
     os.makedirs(output_dir, exist_ok=True)
-
+    os.makedirs(data_args.encode_output_path, exist_ok=True)
     # -------- Load reranker model (DDP-safe download) --------
-    if rank == 0:
-        print_master(f"[rank=0] Loading reranker from: {model_args.model_name_or_path}")
-        reranker = Qwen3VLReranker(
-            model_args.model_name_or_path,
-            default_instruction=model_args.instruction,
-            attn_implementation='flash_attention_2',
-            torch_dtype=torch.bfloat16,
-        )
 
-    if dist.is_initialized():
-        dist.barrier()
+    print_master(f"[rank=0] Loading reranker from: {model_args.model_name_or_path}")
 
-    if rank != 0:
-        print_rank("Loading reranker from cache...")
-        time.sleep(random.randint(2 * rank, 3 * rank))
-        reranker = Qwen3VLReranker(
-            model_args.model_name_or_path,
-            default_instruction=model_args.instruction,
-            torch_dtype=torch.bfloat16,
-        )
+    vllm_api_url = getattr(model_args, 'vllm_api_url', None)
+    print_master(f"[vLLM API mode] Connecting to service: {vllm_api_url or 'default'}...")
+
+    reranker = Qwen3VLRerankerVLLM(
+        model_args.model_name_or_path,
+        vllm_api_url = model_args.vllm_api_url
+    )
 
     with open(data_args.dataset_config, 'r') as yaml_file:
         dataset_configs = yaml.safe_load(yaml_file)
 
     # -------- Main loop over datasets --------
     for dataset_name, task_config in dataset_configs.items():
-        if dist.is_initialized():
-            dist.barrier()
         print_master(f"\n--- Reranker Evaluating {dataset_name} ---")
 
         # 0. Skip if already exists and valid
@@ -296,12 +276,6 @@ def main():
             print_master(f"[{dataset_name}] Final Rerank Score: {formatted}")
             print_master(f"Saved: {score_path}")
             print_master(f"Saved: {pred_path}")
-            
-
-    if dist.is_initialized():
-        dist.barrier()
-        dist.destroy_process_group()
-
 
 if __name__ == "__main__":
     main()

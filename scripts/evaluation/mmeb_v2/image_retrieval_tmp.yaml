@@ -1,0 +1,7 @@
+# RET i -> t
+MSCOCO_i2t:
+    dataset_parser: image_i2t
+    dataset_name: MSCOCO_i2t
+    dataset_split: test
+    image_root: image-tasks/
+    eval_type: local
