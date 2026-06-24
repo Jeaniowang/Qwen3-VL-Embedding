@@ -120,14 +120,7 @@ for MODALITY in "${MODALITIES[@]}"; do
 #
 #    echo "  - Executing command on node $RANK..."
 #    eval "$cmd"
-    python3 src/evaluation/mmeb_v2/eval_reranker.py  --per_device_eval_batch_size 16 \
-    --model_name_or_path "Qwen/Qwen3-VL-Reranker-2B" \
-     --dataset_config "scripts/evaluation/mmeb_v2/image_retrieval_tmp.yaml" \
-     --encode_output_path "results/evaluation/mmeb_v2/Qwen3-VL-Embedding-2B/tmp/"  \
-     --rerank_output_path results/evaluation/mmeb_v2/Qwen3-VL-Reranker-2B \
-     --data_basedir "D:\data\mmeb_v2" \
-     --topk 100 \
-     --vllm_api_url http://192.168.9.146:8000/v1
+    python3 src/evaluation/mmeb_v2/eval_reranker.py  --per_device_eval_batch_size 16 --model_name_or_path "Qwen/Qwen3-VL-Reranker-2B" --dataset_config "scripts/evaluation/mmeb_v2/image_retrieval_tmp.yaml" --encode_output_path "results/evaluation/mmeb_v2/Qwen3-VL-Embedding-2B/tmp/" --output_dir "results/evaluation/mmeb_v2/Qwen3-VL-Embedding-2B/tmp/"  --rerank_output_path results/evaluation/mmeb_v2/Qwen3-VL-Reranker-2B  --data_basedir "D:\data\mmeb_v2" --topk 100 --vllm_api_url http://192.168.9.146:9090/v1
 
     if [ $? -eq 0 ]; then
         echo "  - ✅ Done on node $RANK."

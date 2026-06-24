@@ -133,12 +133,7 @@ for MODALITY in "${MODALITIES[@]}"; do
 #        --dataset_config "$DATA_CONFIG_PATH" \
 #        --encode_output_path "$OUTPUT_PATH" \
 #        --data_basedir D:\data\mmeb_v2\image-tasks
-    python3 src/evaluation/mmeb_v2/eval_embedding.py --normalize true \
-     --per_device_eval_batch_size 16 \
-      --model_name_or_path "Qwen/Qwen3-VL-Embedding-2B" \
-      --dataset_config "scripts/evaluation/mmeb_v2/tmp.yaml" \
-      --encode_output_path "results/evaluation/mmeb_v2/Qwen3-VL-Embedding-2B/tmp/" \
-      --data_basedir "D:\data\mmeb_v2" --vllm_api_url http://192.168.13.113:9099/v1
+    python3 src/evaluation/mmeb_v2/eval_embedding.py --normalize true --per_device_eval_batch_size 16  --model_name_or_path "Qwen/Qwen3-VL-Embedding-8B" --dataset_config "scripts/evaluation/mmeb_v2/image_tmp.yaml" --encode_output_path "results/evaluation/mmeb_v2/Qwen3-VL-Embedding-8B/tmp/"  --output_dir "results/evaluation/mmeb_v2/Qwen3-VL-Embedding-8B/tmp/" --data_basedir "D:\data\mmeb_v2" --vllm_api_url http://192.168.9.146:9090/v1
 
 
     if [ $? -eq 0 ]; then
